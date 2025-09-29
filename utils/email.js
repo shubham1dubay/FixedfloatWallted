@@ -9,14 +9,22 @@ const getEmailConfig = () => {
     return null;
   }
 
-  // Gmail configuration
+  // Gmail configuration - Use SMTP for better compatibility
   if (emailUser.includes('@gmail.com')) {
     return {
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
       auth: {
         user: emailUser,
         pass: emailPass
-      }
+      },
+      tls: {
+        rejectUnauthorized: false
+      },
+      connectionTimeout: 60000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000
     };
   }
 
@@ -57,20 +65,24 @@ const getEmailConfig = () => {
     },
     tls: {
       rejectUnauthorized: false
-    }
+    },
+    connectionTimeout: 60000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000
   };
 };
 
 // Create email transporter
 const createTransporter = () => {
   const config = getEmailConfig();
-
+  
   if (!config) {
     return null;
   }
 
   try {
-    return nodemailer.createTransport(config);
+    const transporter = nodemailer.createTransport(config);
+    return transporter;
   } catch (error) {
     console.error('Error creating email transporter:', error.message);
     return null;
@@ -98,9 +110,11 @@ const sendOTPEmail = async (email, otp, firstName = 'User', type = 'verification
     // Verify transporter connection
     try {
       await transporter.verify();
+      console.log(`✅ Email transporter verified for ${email}`);
     } catch (verifyError) {
       console.error('Email transporter verification failed:', verifyError.message);
       console.log(`🔐 OTP for ${email}: ${otp}`);
+      console.log(`⏰ OTP expires in 10 minutes`);
       return { success: false, reason: 'verification_failed', error: verifyError.message };
     }
 

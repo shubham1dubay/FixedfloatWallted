@@ -36,12 +36,21 @@ const signup = async (req, res) => {
         await user.save();
 
         // Send OTP email
+        console.log(`📧 Attempting to send OTP to ${email}...`);
         const emailResult = await sendOTPEmail(email, otp, firstName, 'verification');
-        if (!emailResult.success) {
+
+        if (emailResult.success) {
+            console.log(`✅ OTP email sent successfully to ${email}`);
+        } else {
             if (emailResult.reason === 'not_configured') {
-                console.log(`📧 Email not configured. OTP shown in console above.`);
+                console.log(`⚠️  Email not configured. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to fix email configuration`);
+            } else if (emailResult.reason === 'verification_failed') {
+                console.log(`❌ Email verification failed. OTP shown in console above.`);
+                console.log(`🔧 Check your email credentials and run: node fix-email-otp.js`);
             } else {
-                console.log(`📧 Email sending failed. OTP shown in console above.`);
+                console.log(`❌ Email sending failed. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to diagnose the issue`);
             }
         }
 
@@ -114,12 +123,21 @@ const login = async (req, res) => {
         await user.save();
 
         // Send OTP email
+        console.log(`📧 Attempting to send login OTP to ${email}...`);
         const emailResult = await sendOTPEmail(email, otp, user.firstName, 'login');
-        if (!emailResult.success) {
+
+        if (emailResult.success) {
+            console.log(`✅ Login OTP email sent successfully to ${email}`);
+        } else {
             if (emailResult.reason === 'not_configured') {
-                console.log(`📧 Email not configured. OTP shown in console above.`);
+                console.log(`⚠️  Email not configured. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to fix email configuration`);
+            } else if (emailResult.reason === 'verification_failed') {
+                console.log(`❌ Email verification failed. OTP shown in console above.`);
+                console.log(`🔧 Check your email credentials and run: node fix-email-otp.js`);
             } else {
-                console.log(`📧 Email sending failed. OTP shown in console above.`);
+                console.log(`❌ Email sending failed. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to diagnose the issue`);
             }
         }
 
@@ -197,8 +215,24 @@ const verifyOTP = async (req, res) => {
         await user.save();
 
         // Send OTP email
+        console.log(`📧 Attempting to send verification OTP to ${email}...`);
         const emailResult = await sendOTPEmail(email, otp, user.firstName, 'verification');
         const emailSent = emailResult.success;
+
+        if (emailResult.success) {
+            console.log(`✅ Verification OTP email sent successfully to ${email}`);
+        } else {
+            if (emailResult.reason === 'not_configured') {
+                console.log(`⚠️  Email not configured. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to fix email configuration`);
+            } else if (emailResult.reason === 'verification_failed') {
+                console.log(`❌ Email verification failed. OTP shown in console above.`);
+                console.log(`🔧 Check your email credentials and run: node fix-email-otp.js`);
+            } else {
+                console.log(`❌ Email sending failed. OTP shown in console above.`);
+                console.log(`🔧 Run: node fix-email-otp.js to diagnose the issue`);
+            }
+        }
 
         res.json({
             success: true,
