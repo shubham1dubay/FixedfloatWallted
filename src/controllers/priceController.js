@@ -1,4 +1,4 @@
-const { getTokenPrice, getAllPrices, convertTokens, getPriceHistory } = require('../../utils/priceService');
+const { getTokenPrice, getAllPrices, convertTokens, getPriceHistory } = require('../utils/priceService');
 
 // Get price for a specific token
 const getPrice = async (req, res) => {

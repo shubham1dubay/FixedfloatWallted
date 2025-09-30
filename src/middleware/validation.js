@@ -70,9 +70,16 @@ const validateForgotPassword = [
 ];
 
 const validateResetPassword = [
-    body('token')
-        .notEmpty()
-        .withMessage('Reset token is required'),
+    body('email')
+        .isEmail()
+        .withMessage('Please provide a valid email address')
+        .normalizeEmail()
+        .toLowerCase(),
+    body('otp')
+        .isLength({ min: 6, max: 6 })
+        .withMessage('OTP must be 6 digits')
+        .isNumeric()
+        .withMessage('OTP must contain only numbers'),
     body('password')
         .isLength({ min: 8 })
         .withMessage('Password must be at least 8 characters long')

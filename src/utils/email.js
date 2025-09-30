@@ -1,22 +1,27 @@
 const nodemailer = require('nodemailer');
 
-// Simple OTP email function
+// OTP email function - only email functionality needed
 async function sendOTPEmail(toEmail, otp) {
-    // Create a transporter using your email service credentials
-    let transporter = nodemailer.createTransport({
-        service: 'gmail', // e.g., Gmail, Outlook
-        auth: {
-            user: process.env.EMAIL_USER || 'your-email@gmail.com', // replace with your email
-            pass: process.env.EMAIL_PASS || 'your-email-password'   // replace with your email password or app password
-        }
-    });
+  // Create a transporter using your email service credentials
+  let transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: process.env.EMAIL_PORT || 587,
+    secure: process.env.EMAIL_SECURE === 'true' || false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_USER || 'your-email@gmail.com', // replace with your email
+      pass: process.env.EMAIL_PASS || 'your-app-password'   // replace with your app password
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
 
-    // Email options
-    let mailOptions = {
-        from: `"FixedFloat Wallet" <${process.env.EMAIL_USER || 'your-email@gmail.com'}>`,
-        to: toEmail,
-        subject: 'Your OTP Code - FixedFloat Wallet',
-        html: `
+  // Email options
+  let mailOptions = {
+    from: `"FixedFloat Wallet" <${process.env.EMAIL_USER || 'your-email@gmail.com'}>`,
+    to: toEmail,
+    subject: 'Your OTP Code - FixedFloat Wallet',
+    html: `
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
                       <div style="text-align: center; padding-bottom: 20px; border-bottom: 1px solid #eee;">
                         <h1 style="color: #333;">FixedFloat Wallet</h1>
@@ -35,39 +40,19 @@ async function sendOTPEmail(toEmail, otp) {
                       </div>
                     </div>
                   `
-    };
+  };
 
-    // Send email
-    try {
-        let info = await transporter.sendMail(mailOptions);
-        console.log('Email sent: ' + info.response);
-        return { success: true, messageId: info.messageId };
-    } catch (error) {
-        console.error('Error sending email:', error);
-        return { success: false, error: error.message };
-    }
+  // Send email
+  try {
+    let info = await transporter.sendMail(mailOptions);
+    console.log('Email sent: ' + info.response);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { success: false, error: error.message };
+  }
 }
 
-// Placeholder for other email functions if needed later
-// For now, only sendOTPEmail is active as per user's request for simplification.
-const sendWelcomeEmail = async (email, firstName) => {
-    console.log(`Welcome email for ${email} not sent. Only OTP email is configured.`);
-    return { success: false, reason: 'not_configured' };
-};
-
-const sendPasswordResetEmail = async (email, resetToken, firstName = 'User') => {
-    console.log(`Password reset email for ${email} not sent. Only OTP email is configured.`);
-    return { success: false, reason: 'not_configured' };
-};
-
-const testEmailConfig = async () => {
-    console.log(`Test email config not available. Only OTP email is configured.`);
-    return { success: false, reason: 'not_configured' };
-};
-
 module.exports = {
-    sendOTPEmail,
-    sendWelcomeEmail,
-    sendPasswordResetEmail,
-    testEmailConfig
+  sendOTPEmail
 };

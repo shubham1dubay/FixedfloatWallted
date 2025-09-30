@@ -10,9 +10,9 @@ connectDB();
 const server = app.listen(PORT, () => {
     console.log(`🚀 FixedFloat Wallet API running on port ${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-    console.log(`📈 Price API: http://localhost:${PORT}/api/price`);
-    console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
+    //  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    //console.log(`📈 Price API: http://localhost:${PORT}/api/price`);
+    //console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
 });
 
 // Handle unhandled promise rejections

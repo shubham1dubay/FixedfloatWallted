@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { generateTokenPair, generateEmailVerificationToken } = require('../utils/jwt');
-const { sendOTPEmail, sendWelcomeEmail, sendPasswordResetEmail, testEmailConfig } = require('../utils/email');
+const { sendOTPEmail } = require('../utils/email');
 
 const signup = async (req, res) => {
     try {
@@ -139,11 +139,7 @@ const verifyOTPCode = async (req, res) => {
         user.emailVerificationExpires = undefined;
         await user.save();
 
-        try {
-            await sendWelcomeEmail(email, user.firstName);
-        } catch (emailError) {
-            console.error('Failed to send welcome email:', emailError);
-        }
+        // Welcome email removed - only OTP emails are sent
 
         res.json({
             success: true,
@@ -211,20 +207,30 @@ const forgotPassword = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found with this email address' });
         }
-        const resetToken = user.generatePasswordResetToken();
+
+        // Generate OTP for password reset
+        const otp = user.generateOTP();
         await user.save();
 
-        const emailResult = await sendPasswordResetEmail(email, resetToken, user.firstName);
+        console.log(`📧 Attempting to send password reset OTP to ${email}...`);
+        const emailResult = await sendOTPEmail(email, otp);
 
-        if (!emailResult.success) {
-            console.log(`📧 Password reset email sending failed. Reset token for ${email}: ${resetToken}`);
+        if (emailResult.success) {
+            console.log(`✅ Password reset OTP email sent successfully to ${email}`);
+        } else {
+            console.log(`❌ Email sending failed. OTP shown in console above.`);
             console.log(`🔧 Check your email credentials in .env file`);
         }
 
         res.json({
             success: true,
-            message: 'Password reset instructions sent to your email',
-            data: { email: user.email, resetToken: emailResult.success ? undefined : resetToken, emailSent: emailResult.success, expiresIn: '15 minutes' }
+            message: 'Password reset OTP sent to your email',
+            data: {
+                email: user.email,
+                otpExpiresIn: '10 minutes',
+                emailSent: emailResult.success,
+                message: emailResult.success ? 'Check your email for OTP' : 'OTP not sent to email, check console'
+            }
         });
     } catch (error) {
         console.error('Forgot password error:', error);
@@ -234,13 +240,20 @@ const forgotPassword = async (req, res) => {
 
 const resetPassword = async (req, res) => {
     try {
-        const { token, password } = req.body;
-        const user = await User.findOne({ passwordResetToken: token, passwordResetExpires: { $gt: Date.now() } });
+        const { email, otp, password } = req.body;
+        const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+            return res.status(404).json({ success: false, message: 'User not found' });
         }
+
+        // Verify OTP first
+        const otpResult = await user.verifyOTP(otp);
+        if (!otpResult.valid) {
+            return res.status(400).json({ success: false, message: otpResult.message });
+        }
+
+        // Reset password
         user.password = password;
-        user.clearPasswordResetToken();
         await user.save();
 
         res.json({
@@ -254,13 +267,27 @@ const resetPassword = async (req, res) => {
     }
 };
 
-const testEmail = async (req, res) => {
+const verifyPasswordResetOTP = async (req, res) => {
     try {
-        const result = await testEmailConfig();
-        res.json({ success: result.success, message: result.message, data: { config: result.config, timestamp: new Date().toISOString() } });
+        const { email, otp } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const otpResult = await user.verifyOTP(otp);
+        if (!otpResult.valid) {
+            return res.status(400).json({ success: false, message: otpResult.message });
+        }
+
+        res.json({
+            success: true,
+            message: 'OTP verified successfully. You can now reset your password.',
+            data: { email: user.email, verified: true }
+        });
     } catch (error) {
-        console.error('Email test error:', error);
-        res.status(500).json({ success: false, message: 'Email test failed', error: error.message });
+        console.error('Password reset OTP verification error:', error);
+        res.status(500).json({ success: false, message: 'OTP verification failed', error: error.message });
     }
 };
 
@@ -273,5 +300,5 @@ module.exports = {
     logout,
     forgotPassword,
     resetPassword,
-    testEmail
+    verifyPasswordResetOTP
 };

@@ -16,7 +16,7 @@ const {
     logout,
     forgotPassword,
     resetPassword,
-    testEmail
+    verifyPasswordResetOTP
 } = require('../controllers/authController');
 
 const router = express.Router();
@@ -28,7 +28,7 @@ router.post('/send-otp', verifyOTP);
 router.post('/resend-otp', resendOTP);
 router.post('/logout', authenticateToken, logout);
 router.post('/forgot-password', validateForgotPassword, forgotPassword);
+router.post('/verify-password-reset-otp', validateOTP, verifyPasswordResetOTP);
 router.post('/reset-password', validateResetPassword, resetPassword);
-router.get('/test-email', testEmail);
 
 module.exports = router;
