@@ -89,11 +89,25 @@ const validatePasswordResetOTP = [
     handleValidationErrors
 ];
 
+const validateResendOTP = [
+    body('email')
+        .isEmail()
+        .withMessage('Please provide a valid email address')
+        .normalizeEmail()
+        .toLowerCase(),
+    body('type')
+        .optional()
+        .isIn(['signup', 'login', 'forgot-password'])
+        .withMessage('Type must be one of: signup, login, forgot-password'),
+    handleValidationErrors
+];
+
 module.exports = {
     handleValidationErrors,
     validateSignup,
     validateLogin,
     validateOTP,
     validateForgotPassword,
-    validatePasswordResetOTP
+    validatePasswordResetOTP,
+    validateResendOTP
 };

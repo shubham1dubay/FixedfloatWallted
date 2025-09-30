@@ -174,12 +174,7 @@ const resendOTP = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // For signup verification, do not resend if already verified
-        if (type === 'signup' && user.isEmailVerified) {
-            return res.status(400).json({ success: false, message: 'Email is already verified' });
-        }
-
-        // For login and forgot-password, allow OTP resend regardless of email verification status
+        // Generate new OTP - allow resending unlimited times for all types
         const otp = user.generateOTP();
         await user.save();
 
@@ -187,16 +182,40 @@ const resendOTP = async (req, res) => {
         const emailResult = await sendOTPEmail(email, otp);
 
         if (emailResult.success) {
-            console.log(`✅ OTP resent successfully to ${email}`);
+            console.log(`✅ OTP resent successfully to ${email} for ${type}`);
         } else {
             console.log(`❌ Email sending failed. OTP shown in console above.`);
             console.log(`🔧 Check your email credentials in .env file`);
         }
 
+        // Different messages based on type
+        let message = '';
+        switch (type) {
+            case 'signup':
+                message = emailResult.success ? 'Verification OTP resent to your email successfully' : 'Verification OTP regenerated successfully. Check console for OTP.';
+                break;
+            case 'login':
+                message = emailResult.success ? 'Login OTP resent to your email successfully' : 'Login OTP regenerated successfully. Check console for OTP.';
+                break;
+            case 'forgot-password':
+                message = emailResult.success ? 'Password reset OTP resent to your email successfully' : 'Password reset OTP regenerated successfully. Check console for OTP.';
+                break;
+            default:
+                message = emailResult.success ? 'OTP resent to your email successfully' : 'OTP regenerated successfully. Check console for OTP.';
+        }
+
         res.json({
             success: true,
-            message: emailResult.success ? 'OTP resent to your email successfully' : 'OTP regenerated successfully. Check console for OTP.',
-            data: { email: user.email, otpExpiresIn: '10 minutes', emailSent: emailResult.success, type }
+            message: message,
+            data: {
+                email: user.email,
+                otpExpiresIn: '10 minutes',
+                emailSent: emailResult.success,
+                type,
+                purpose: type === 'signup' ? 'Email verification' :
+                    type === 'login' ? 'Login verification' :
+                        type === 'forgot-password' ? 'Password reset' : 'OTP verification'
+            }
         });
     } catch (error) {
         console.error('Resend OTP error:', error);
