@@ -4,12 +4,12 @@ const nodemailer = require('nodemailer');
 async function sendOTPEmail(toEmail, otp) {
   // Create a transporter using your email service credentials
   let transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: process.env.EMAIL_PORT || 587,
-    secure: process.env.EMAIL_SECURE === 'true' || false, // true for 465, false for other ports
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: process.env.SMTP_PORT || 587,
+    secure: process.env.SMTP_SECURE === 'true' || false, // true for 465, false for other ports
     auth: {
-      user: process.env.EMAIL_USER || 'your-email@gmail.com', // replace with your email
-      pass: process.env.EMAIL_PASS || 'your-app-password'   // replace with your app password
+      user: process.env.SMTP_USER || 'your-email@gmail.com', // replace with your email
+      pass: process.env.SMTP_PASS || 'your-app-password'   // replace with your app password
     },
     tls: {
       rejectUnauthorized: false
@@ -18,7 +18,7 @@ async function sendOTPEmail(toEmail, otp) {
 
   // Email options
   let mailOptions = {
-    from: `"FixedFloat Wallet" <${process.env.EMAIL_USER || 'your-email@gmail.com'}>`,
+    from: `"FixedFloat Wallet" <${process.env.SMTP_USER || 'your-email@gmail.com'}>`,
     to: toEmail,
     subject: 'Your OTP Code - FixedFloat Wallet',
     html: `
