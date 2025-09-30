@@ -28,8 +28,7 @@ const signup = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: 'User registered successfully. Please check your email for OTP verification.',
-            data: { userId: user._id, email: user.email, firstName: user.firstName || null, requiresVerification: true }
+            message: 'User registered successfully. Please check your email for OTP verification.'
         });
     } catch (error) {
         console.error('Signup error:', error);
@@ -64,16 +63,17 @@ const login = async (req, res) => {
         await user.resetLoginAttempts();
         user.lastLogin = new Date();
         await user.save();
-        const tokens = generateTokenPair(user._id, user.email, user.role);
 
         res.json({
             success: true,
-            message: 'Login successful. OTP sent to your email for additional security.',
+            message: 'OTP sent to your email. Please verify to complete login.',
             data: {
-                user: { id: user._id, email: user.email, firstName: user.firstName || null, isEmailVerified: user.isEmailVerified, role: user.role, lastLogin: user.lastLogin },
-                token: tokens.token,
-                expiresIn: tokens.expiresIn,
-                otpInfo: { sent: emailResult.success, expiresIn: '10 minutes', message: emailResult.success ? 'Check your email for OTP' : 'OTP not sent to email, check console' }
+                email: user.email,
+                otpInfo: {
+                    sent: emailResult.success,
+                    expiresIn: '10 minutes',
+                    message: emailResult.success ? 'Check your email for OTP' : 'OTP not sent to email, check console'
+                }
             }
         });
     } catch (error) {
@@ -82,45 +82,10 @@ const login = async (req, res) => {
     }
 };
 
-const verifyOTP = async (req, res) => {
-    try {
-        const { email } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-        if (user.isEmailVerified) {
-            return res.status(400).json({ success: false, message: 'Email is already verified' });
-        }
-
-        const otp = user.generateOTP();
-        await user.save();
-
-        console.log(`📧 Attempting to send verification OTP to ${email}...`);
-        const emailResult = await sendOTPEmail(email, otp);
-        const emailSent = emailResult.success;
-
-        if (emailResult.success) {
-            console.log(`✅ Verification OTP email sent successfully to ${email}`);
-        } else {
-            console.log(`❌ Email sending failed. OTP shown in console above.`);
-            console.log(`🔧 Check your email credentials in .env file`);
-        }
-
-        res.json({
-            success: true,
-            message: emailSent ? 'OTP sent to your email successfully' : 'OTP generated successfully. Check console for OTP.',
-            data: { email: user.email, otpExpiresIn: '10 minutes', emailSent: emailSent }
-        });
-    } catch (error) {
-        console.error('Send OTP error:', error);
-        res.status(500).json({ success: false, message: 'Failed to send OTP', error: error.message });
-    }
-};
 
 const verifyOTPCode = async (req, res) => {
     try {
-        const { email, otp } = req.body;
+        const { email, otp, type } = req.body;
         if (!email || !otp) {
             return res.status(400).json({ success: false, message: 'Email and OTP are required' });
         }
@@ -134,18 +99,67 @@ const verifyOTPCode = async (req, res) => {
             return res.status(400).json({ success: false, message: otpResult.message });
         }
 
-        user.isEmailVerified = true;
-        user.emailVerificationToken = undefined;
-        user.emailVerificationExpires = undefined;
-        await user.save();
+        // Auto-detect verification type if not provided
+        let verificationType = type;
+        if (!verificationType) {
+            // If user is already email verified and has recent OTP, it's likely login
+            if (user.isEmailVerified && user.otp && user.otp.expires > new Date()) {
+                verificationType = 'login';
+            } else if (!user.isEmailVerified) {
+                verificationType = 'signup';
+            } else {
+                verificationType = 'login'; // Default to login for verified users
+            }
+        }
 
-        // Welcome email removed - only OTP emails are sent
+        // Handle different types of OTP verification
+        if (verificationType === 'login') {
+            // For login: return JWT token and user data
+            const tokens = generateTokenPair(user._id, user.email, user.role);
 
-        res.json({
-            success: true,
-            message: 'Email verified successfully',
-            data: { userId: user._id, email: user.email, isEmailVerified: user.isEmailVerified }
-        });
+            res.json({
+                success: true,
+                message: 'Login successful. OTP verified.',
+                data: {
+                    user: {
+                        id: user._id,
+                        email: user.email,
+                        firstName: user.firstName || null,
+                        isEmailVerified: user.isEmailVerified,
+                        role: user.role,
+                        lastLogin: user.lastLogin
+                    },
+                    token: tokens.token,
+                    expiresIn: tokens.expiresIn
+                }
+            });
+        } else if (verificationType === 'signup') {
+            // For signup: mark email as verified
+            user.isEmailVerified = true;
+            user.emailVerificationToken = undefined;
+            user.emailVerificationExpires = undefined;
+            await user.save();
+
+            res.json({
+                success: true,
+                message: 'User registered successfully. Please check your email for OTP verification.',
+                data: {
+                    userId: user._id,
+                    email: user.email,
+                    firstName: user.firstName,
+                    requiresVerification: false
+                }
+            });
+        } else if (verificationType === 'forgot-password') {
+            // For forgot password: just verify OTP
+            res.json({
+                success: true,
+                message: 'OTP verified successfully. You can now reset your password.',
+                data: { email: user.email, verified: true }
+            });
+        } else {
+            res.status(400).json({ success: false, message: 'Invalid verification type. Use: signup, login, or forgot-password' });
+        }
     } catch (error) {
         console.error('OTP verification error:', error);
         res.status(500).json({ success: false, message: 'OTP verification failed', error: error.message });
@@ -154,19 +168,22 @@ const verifyOTPCode = async (req, res) => {
 
 const resendOTP = async (req, res) => {
     try {
-        const { email } = req.body;
+        const { email, type = 'signup' } = req.body; // type: signup | login | forgot-password
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-        if (user.isEmailVerified) {
+
+        // For signup verification, do not resend if already verified
+        if (type === 'signup' && user.isEmailVerified) {
             return res.status(400).json({ success: false, message: 'Email is already verified' });
         }
 
+        // For login and forgot-password, allow OTP resend regardless of email verification status
         const otp = user.generateOTP();
         await user.save();
 
-        console.log(`📧 Attempting to resend OTP to ${email}...`);
+        console.log(`📧 Attempting to resend OTP to ${email} for ${type}...`);
         const emailResult = await sendOTPEmail(email, otp);
 
         if (emailResult.success) {
@@ -179,7 +196,7 @@ const resendOTP = async (req, res) => {
         res.json({
             success: true,
             message: emailResult.success ? 'OTP resent to your email successfully' : 'OTP regenerated successfully. Check console for OTP.',
-            data: { email: user.email, otpExpiresIn: '10 minutes', emailSent: emailResult.success }
+            data: { email: user.email, otpExpiresIn: '10 minutes', emailSent: emailResult.success, type }
         });
     } catch (error) {
         console.error('Resend OTP error:', error);
@@ -238,34 +255,6 @@ const forgotPassword = async (req, res) => {
     }
 };
 
-const resetPassword = async (req, res) => {
-    try {
-        const { email, otp, password } = req.body;
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        // Verify OTP first
-        const otpResult = await user.verifyOTP(otp);
-        if (!otpResult.valid) {
-            return res.status(400).json({ success: false, message: otpResult.message });
-        }
-
-        // Reset password
-        user.password = password;
-        await user.save();
-
-        res.json({
-            success: true,
-            message: 'Password reset successfully',
-            data: { email: user.email, message: 'You can now login with your new password' }
-        });
-    } catch (error) {
-        console.error('Reset password error:', error);
-        res.status(500).json({ success: false, message: 'Failed to reset password', error: error.message });
-    }
-};
 
 const verifyPasswordResetOTP = async (req, res) => {
     try {
@@ -294,11 +283,9 @@ const verifyPasswordResetOTP = async (req, res) => {
 module.exports = {
     signup,
     login,
-    verifyOTP,
     verifyOTPCode,
     resendOTP,
     logout,
     forgotPassword,
-    resetPassword,
     verifyPasswordResetOTP
 };

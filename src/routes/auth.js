@@ -4,18 +4,15 @@ const {
     validateSignup,
     validateLogin,
     validateOTP,
-    validateForgotPassword,
-    validateResetPassword
+    validateForgotPassword
 } = require('../middleware/validation');
 const {
     signup,
     login,
-    verifyOTP,
     verifyOTPCode,
     resendOTP,
     logout,
     forgotPassword,
-    resetPassword,
     verifyPasswordResetOTP
 } = require('../controllers/authController');
 
@@ -24,11 +21,9 @@ const router = express.Router();
 router.post('/signup', validateSignup, signup);
 router.post('/login', validateLogin, login);
 router.post('/verify-otp', validateOTP, verifyOTPCode);
-router.post('/send-otp', verifyOTP);
 router.post('/resend-otp', resendOTP);
 router.post('/logout', authenticateToken, logout);
 router.post('/forgot-password', validateForgotPassword, forgotPassword);
 router.post('/verify-password-reset-otp', validateOTP, verifyPasswordResetOTP);
-router.post('/reset-password', validateResetPassword, resetPassword);
 
 module.exports = router;
