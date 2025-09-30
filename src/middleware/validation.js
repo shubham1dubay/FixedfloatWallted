@@ -69,7 +69,8 @@ const validateForgotPassword = [
     handleValidationErrors
 ];
 
-const validateResetPassword = [
+
+const validatePasswordResetOTP = [
     body('email')
         .isEmail()
         .withMessage('Please provide a valid email address')
@@ -94,5 +95,5 @@ module.exports = {
     validateLogin,
     validateOTP,
     validateForgotPassword,
-    validateResetPassword
+    validatePasswordResetOTP
 };

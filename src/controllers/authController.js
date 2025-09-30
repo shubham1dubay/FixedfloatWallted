@@ -258,7 +258,12 @@ const forgotPassword = async (req, res) => {
 
 const verifyPasswordResetOTP = async (req, res) => {
     try {
-        const { email, otp } = req.body;
+        const { email, otp, password } = req.body;
+
+        if (!email || !otp || !password) {
+            return res.status(400).json({ success: false, message: 'Email, OTP, and password are required' });
+        }
+
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
@@ -269,16 +274,37 @@ const verifyPasswordResetOTP = async (req, res) => {
             return res.status(400).json({ success: false, message: otpResult.message });
         }
 
+        // Validate password strength
+        if (password.length < 8) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
+        }
+
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(password)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+            });
+        }
+
+        // Update password
+        user.password = password;
+        await user.save();
+
         res.json({
             success: true,
-            message: 'OTP verified successfully. You can now reset your password.',
-            data: { email: user.email, verified: true }
+            message: 'Password reset successfully',
+            data: {
+                email: user.email,
+                verified: true,
+                passwordReset: true
+            }
         });
     } catch (error) {
         console.error('Password reset OTP verification error:', error);
         res.status(500).json({ success: false, message: 'OTP verification failed', error: error.message });
     }
 };
+
 
 module.exports = {
     signup,
