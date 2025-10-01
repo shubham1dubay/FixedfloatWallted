@@ -76,16 +76,20 @@ const validatePasswordResetOTP = [
         .withMessage('Please provide a valid email address')
         .normalizeEmail()
         .toLowerCase(),
-    body('otp')
-        .isLength({ min: 6, max: 6 })
-        .withMessage('OTP must be 6 digits')
-        .isNumeric()
-        .withMessage('OTP must contain only numbers'),
-    body('password')
+    body('newPassword')
         .isLength({ min: 8 })
         .withMessage('Password must be at least 8 characters long')
         .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
         .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
+    body('confirmPassword')
+        .isLength({ min: 8 })
+        .withMessage('Confirm password must be at least 8 characters long')
+        .custom((value, { req }) => {
+            if (value !== req.body.newPassword) {
+                throw new Error('Passwords do not match');
+            }
+            return true;
+        }),
     handleValidationErrors
 ];
 

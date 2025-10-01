@@ -14,7 +14,7 @@ const signup = async (req, res) => {
         // Generate OTP and expiration time
         const otpLength = parseInt(process.env.OTP_LENGTH) || 6;
         const otpExpiresIn = process.env.OTP_EXPIRES_IN || '10m';
-        
+
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expires = new Date();
         const timeUnit = otpExpiresIn.slice(-1);
@@ -209,10 +209,20 @@ const verifyOTPCode = async (req, res) => {
                 return res.status(400).json({ success: false, message: otpResult.message });
             }
 
+            // Store a flag that OTP has been verified for password reset
+            // We can use a simple approach by storing in user model or temp storage
+            user.passwordResetVerified = true;
+            user.passwordResetVerifiedAt = new Date();
+            await user.save();
+
             res.json({
                 success: true,
                 message: 'OTP verified successfully. You can now reset your password.',
-                data: { email: user.email, verified: true }
+                data: {
+                    email: user.email,
+                    verified: true,
+                    canResetPassword: true
+                }
             });
         } else {
             res.status(400).json({ success: false, message: 'Invalid verification type. Use: signup, login, or forgot-password' });
@@ -226,12 +236,12 @@ const verifyOTPCode = async (req, res) => {
 const resendOTP = async (req, res) => {
     try {
         const { email, type = 'signup' } = req.body; // type: signup | login | forgot-password
-        
+
         if (type === 'signup') {
             // Check if it's a pending signup
             const { getPendingSignup, storePendingSignup } = require('../utils/tempStorage');
             const pendingSignup = getPendingSignup(email);
-            
+
             if (!pendingSignup) {
                 return res.status(404).json({ success: false, message: 'No pending signup found for this email' });
             }
@@ -239,7 +249,7 @@ const resendOTP = async (req, res) => {
             // Generate new OTP for pending signup
             const otpLength = parseInt(process.env.OTP_LENGTH) || 6;
             const otpExpiresIn = process.env.OTP_EXPIRES_IN || '10m';
-            
+
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             const expires = new Date();
             const timeUnit = otpExpiresIn.slice(-1);
@@ -276,7 +286,7 @@ const resendOTP = async (req, res) => {
                     purpose: 'Email verification'
                 }
             });
-        } else {
+        } else if (type === 'login' || type === 'forgot-password') {
             // For login and forgot-password, find existing user
             const user = await User.findOne({ email });
             if (!user) {
@@ -299,15 +309,19 @@ const resendOTP = async (req, res) => {
 
             // Different messages based on type
             let message = '';
+            let purpose = '';
             switch (type) {
                 case 'login':
                     message = emailResult.success ? 'Login OTP resent to your email successfully' : 'Login OTP regenerated successfully. Check console for OTP.';
+                    purpose = 'Login verification';
                     break;
                 case 'forgot-password':
                     message = emailResult.success ? 'Password reset OTP resent to your email successfully' : 'Password reset OTP regenerated successfully. Check console for OTP.';
+                    purpose = 'Password reset';
                     break;
                 default:
                     message = emailResult.success ? 'OTP resent to your email successfully' : 'OTP regenerated successfully. Check console for OTP.';
+                    purpose = 'OTP verification';
             }
 
             res.json({
@@ -318,9 +332,13 @@ const resendOTP = async (req, res) => {
                     otpExpiresIn: '10 minutes',
                     emailSent: emailResult.success,
                     type,
-                    purpose: type === 'login' ? 'Login verification' :
-                        type === 'forgot-password' ? 'Password reset' : 'OTP verification'
+                    purpose
                 }
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                message: 'Invalid type. Use: signup, login, or forgot-password'
             });
         }
     } catch (error) {
@@ -383,10 +401,15 @@ const forgotPassword = async (req, res) => {
 
 const verifyPasswordResetOTP = async (req, res) => {
     try {
-        const { email, otp, password } = req.body;
+        const { email, newPassword, confirmPassword } = req.body;
 
-        if (!email || !otp || !password) {
-            return res.status(400).json({ success: false, message: 'Email, OTP, and password are required' });
+        if (!email || !newPassword || !confirmPassword) {
+            return res.status(400).json({ success: false, message: 'Email, newPassword, and confirmPassword are required' });
+        }
+
+        // Check if passwords match
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ success: false, message: 'Passwords do not match' });
         }
 
         const user = await User.findOne({ email });
@@ -394,17 +417,33 @@ const verifyPasswordResetOTP = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const otpResult = await user.verifyOTP(otp);
-        if (!otpResult.valid) {
-            return res.status(400).json({ success: false, message: otpResult.message });
+        // Check if user has verified OTP for password reset
+        if (!user.passwordResetVerified) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please verify OTP first using /api/auth/verify-otp with type: forgot-password'
+            });
+        }
+
+        // Check if verification is not too old (e.g., within 10 minutes)
+        const verificationAge = Date.now() - user.passwordResetVerifiedAt.getTime();
+        const maxAge = 10 * 60 * 1000; // 10 minutes
+        if (verificationAge > maxAge) {
+            user.passwordResetVerified = false;
+            user.passwordResetVerifiedAt = undefined;
+            await user.save();
+            return res.status(400).json({
+                success: false,
+                message: 'OTP verification has expired. Please verify OTP again.'
+            });
         }
 
         // Validate password strength
-        if (password.length < 8) {
+        if (newPassword.length < 8) {
             return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
         }
 
-        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(password)) {
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(newPassword)) {
             return res.status(400).json({
                 success: false,
                 message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
@@ -412,7 +451,12 @@ const verifyPasswordResetOTP = async (req, res) => {
         }
 
         // Update password
-        user.password = password;
+        user.password = newPassword;
+        // Clear any password reset tokens and verification flags
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        user.passwordResetVerified = false;
+        user.passwordResetVerifiedAt = undefined;
         await user.save();
 
         res.json({
@@ -420,13 +464,12 @@ const verifyPasswordResetOTP = async (req, res) => {
             message: 'Password reset successfully',
             data: {
                 email: user.email,
-                verified: true,
                 passwordReset: true
             }
         });
     } catch (error) {
-        console.error('Password reset OTP verification error:', error);
-        res.status(500).json({ success: false, message: 'OTP verification failed', error: error.message });
+        console.error('Password reset error:', error);
+        res.status(500).json({ success: false, message: 'Password reset failed', error: error.message });
     }
 };
 
